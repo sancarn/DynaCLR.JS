@@ -18,3 +18,7 @@ The AHK code which is located in the base directory including all libraries in `
 ## The NodeJS Side
 
 The NodeJS code which is required for the execution of the [NodeJS API](JS/NodeJS_API.MD). This is a wrapper around the AHK Side allowing users to easily execute VB/C#.NET code in-process using NodeJS.
+
+## Special Thanks
+
+Lexicos for the continued developement of Autohotkey and the creation of [CLR.AHK](https://autohotkey.com/boards/viewtopic.php?f=6&t=4633&hilit=CLR.AHK). This project would not have been so easy for me to create if it weren't for CLR.AHK doing most of the work for me. All that was required is a STDIO wrapper around base functionality already existent in CLR.AHK.
