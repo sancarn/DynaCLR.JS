@@ -1,0 +1,11 @@
+1. Compile .ahk into .exe
+2. run command prompt
+3. If you want a Console Application type:
+
+	ChangeAppType.exe "path/to/compiled.exe" C
+
+   Else if you want to convert your Console application back to a GUI application type.
+	
+	ChangeAppType.exe "path/to/compiled.exe" G
+
+4. Enjoy compiling!

@@ -1,0 +1,1 @@
+ToConsoleApp\ChangeAppType.exe "StdinDemonstration.exe" "C"

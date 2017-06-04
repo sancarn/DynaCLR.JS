@@ -1,0 +1,1 @@
+ToConsoleApp\ChangeAppType.exe "DynaCLR.exe" "C"
