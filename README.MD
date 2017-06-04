@@ -2,13 +2,12 @@
 
 A dynamic and portable CLRCompiler allowing you to run C#.NET and VB.NET code in NodeJS in-process.
 
-This project aims to be 'as good as' Edge.JS but with increased portability.
+This project aims to be 'as good as' Edge.JS but with increased portability. It should also be less frustrating to setup as it doesn't require node-gyp.
 
 Requirements:
 * Windows OS
 * Microsoft Common Language Runtime (CLR):
  _CLR should be available on all computers with an operating system of Windows Vista? onwards. However it is supported for all: Windows 98, ME, NT 4.0, 2000, XP, and Server 2003_
-
 
 The project is split into 2 halves.
 
