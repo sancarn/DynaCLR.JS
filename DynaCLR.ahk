@@ -1,4 +1,5 @@
 ﻿#include Libs\CLR.ahk
+#include Libs\JSON.ahk
 
 ;How to execute AHK as console application:
 ;http://autohotkey.com/board/topic/52576-ahk-l-output-to-command-line/?p=372590
@@ -7,11 +8,11 @@
 Global LoadedAssemblies		:= []		;These can be made with CLR_Compile and CLR_LoadLibrary
 Global ExecutableObjects    := []		;These can be made with CLR_CreateObject
 Global StoredStrings    	:= []		;These can be made with InjectString
-Global AppDomains			:= []		;These can be made with 
+Global AppDomains			:= []		;These can be made with AppDomain_New and dereferenced with AppDomain_Drop
 
 ;Type info:
 ;	s as string
-InjectString(s){
+Wrapper_InjectString(s){
 	StoredStrings.push(s)
 	return StoredStrings.length()
 }
@@ -25,7 +26,7 @@ Wrapper_CLR_LoadLibrary(AssemblyName, AppDomain=0){
 
 ;Type info:
 ;	Assembly as LoadedAssembliesID, TypeName as string, args as array
-Wrapper_CLR_CreateObject(Assembly, TypeName, Args*){
+Wrapper_CLR_CreateObject(Assembly, TypeName, Args){
 	ExecutableObjects.push(CLR_CreateObject(Assembly, TypeName, Args*))
 	return ExecutableObjects.length()
 }
@@ -52,7 +53,7 @@ Wrapper_AppDomain_New(domain,sBaseDir=""){
 Wrapper_AppDomain_Drop(domainPtr){
 	if(domainPtr=0){
 		stderr:=FileOpen("**","w `n")
-		stderr.WriteLine("Error: Domain pointer must not be 0 or undefined.")
+		stderr.Write("Error: Domain pointer must not be 0 or undefined.")
 		stderr.Read(0)
 		return
 	}
@@ -69,7 +70,7 @@ Wrapper_AppDomain_Drop(domainPtr){
 stdin  := FileOpen("*", "r `n")  ; Requires v1.1.17+
 stdout := FileOpen("*", "w `n")
 stderr := FileOpen("**","w `n")
-stdout.Write("Ready for input.")
+stdout.Write("Ready for input.")	;Note Write is used instead of WriteLine, since WriteLine appends a \r\n onto the end of the string.
 stdout.Read(0) ; Flush the write buffer.
 
 while true
@@ -77,10 +78,12 @@ while true
 	cmdin := RTrim(stdin.ReadLine(), "`n")
 	if(cmdin <> ""){
 		if(cmdin="i)Exit"){
+			stdout.Write("Exitting...")
+			stdout.Read(0) ; Flush the write buffer.
 			ExitApp
 		} else {
 			;parse cmdin 
-			;stdout.WriteLine("You wrote '" cmdin "'.")
+			;stdout.Write("You wrote '" cmdin "'.")
 			;stdout.Read(0) ; Flush the write buffer.
 			
 			;Syntax:    <command> <rest...>
@@ -89,10 +92,12 @@ while true
 			RegexMatch(cmdin,Query,Match)
 			if(Match1~="i)StringInject"){
 				;syntax:    "StringInject <newLinePlaceHolder> <injectedString...>" 
-				args := getArgs(cmdin,3)
-				str  := getRest(cmdin,3)
-				out := InjectString(StrReplace(str, args[2], "`r`n"))
-				stdout.WriteLine(out)
+				;note: newLinePlaceHolder must not contain any white space!!
+				args := getArgs(cmdin,2) ;First 2 arguments are bound as single words
+				str  := getRest(cmdin,3) ;3rd argument is a multi-worded string
+				CrLf := args[2]
+				out := Wrapper_InjectString(StrReplace(str, CrLf, "`r`n"))
+				stdout.Write(out)
 				stdout.Read(0) ; Flush the write buffer.
 				
 			}else if (Match1~="i)StringReturn"){
@@ -100,7 +105,7 @@ while true
 				;syntax:		"StringReturn <pointer>"
 				;description:	Returns a string from a location in memory, indicated by <pointer>
 				args := getArgs(cmdin,2)
-				stdout.WriteLine(StoredStrings[args[2]])
+				stdout.Write(JSON_Stringify(StoredStrings[args[2]]))
 				stdout.Read(0) ; Flush the write buffer.
 				
 			} else if(Match1~="i)CLR_LoadLibrary"){
@@ -108,17 +113,20 @@ while true
 				;description:	Returns a pointer to a loaded assembly.
 				args := getArgs(cmdin,3)
 				domain := args[3] ? AppDomains[args[3]] : 0
-				stdout.WriteLine(Wrapper_CLR_LoadLibrary(args[2],domain))
+				stdout.Write(Wrapper_CLR_LoadLibrary(args[2],domain))
 				stdout.Read(0)
 				
 			} else if(Match1~="i)CLR_CreateObject"){
 				;syntax:		"CLR_CreateObject Assembly TypeName Args*"
 				;description:	returns a pointer to an executable object
-				args := getArgs(cmdin,3)	;get stdin-arguments
-				orgs := getRest(cmdin,3)	;get object-arguments (orgs)
-				collection := []
-				collection := parseCLRObjectArguments(orgs)
-				stdout.WriteLine(Wrapper_CLR_CreateObject(args[2], args[3], collection*))
+				;Args* is an array strinfified using JSON.stringify(array). E.G. [1,"2",{"3":"4"},[5,6]]
+				;These arguments are passed to the objects constructor.
+				args			:= getArgs(cmdin,3)
+				Assembly		:= LoadedAssemblies[args[2]]
+				TypeName		:= args[3]
+				Args			:= JSON_Parse(getRest(cmdin,3))
+				
+				stdout.Write(Wrapper_CLR_CreateObject(Assembly, TypeName, Args))
 				stdout.Read(0)
 				
 			} else if(Match1~="i)CLR_CompileAssembly"){
@@ -138,7 +146,7 @@ while true
 				domain := AppDomainPtr ? AppDomains[AppDomainPtr] : 0
 				FileName := StoredStrings[FileNamePtr]
 				ret := Wrapper_CLR_CompileAssembly(sCode, References, ProviderAssembly, ProviderType, domain, FileName, CompilerOptions)
-				stdout.WriteLine(ret)
+				stdout.Write(ret)
 				stdout.Read(0)
 				
 			} else if(Match1~="i)AppDomain_New"){
@@ -151,7 +159,7 @@ while true
 				;Precess arguments
 				sBaseDir	:= StoredStrings[BaseDirPtr]
 				ret := Wrapper_AppDomain_New(domain,sBaseDir)
-				stdout.WriteLine(ret)
+				stdout.Write(ret)
 				stdout.Read(0)
 				
 			} else if(Match1~="i)AppDomain_Drop"){
@@ -160,24 +168,53 @@ while true
 				args:= getArgs(cmdin,2)
 				domainPtr	:= args[2]
 				Wrapper_AppDomain_Drop(domainPtr)
-			} else if(Match1~="i)Execute"){
+			} else if(Match1~="i)CLR_Execute"){
 			;syntax:			Execute <ObjPtr> <FuncName> <Args*>
+			;Args* is an array strinfified using JSON.stringify(array). E.G. [1,"2",{"3":"4"},[5,6]]
+			;These arguments are the arguments passed to the C#/VB object on execution.
 				args := getArgs(cmdin,3)
-				orgs := getRest(cmdin,3)
 				ObjPtr		:= args[2]
 				FuncName	:= args[3]
-				theArgs		:= []
-				theArgs		:= parseCLRObjectArguments(orgs)
+				theArgs		:= JSON_Parse(getRest(cmdin,3))
 				
 				;Process arguments
 				theObj := ExecutableObjects[ObjPtr]
-				ret := execObjMember(theObj,theFunc,theArgs)
-				stdout.WriteLine(ret ? ret : "true")
+				ret := execObjMember(theObj,FuncName,theArgs ? theArgs : [])
+				stdout.Write(JSON_Stringify(ret ? ret : "true"))
 				stdout.Read(0)
+			} else if(Match1~="i)CLR_GetProperty"){
+				args := getArgs(cmdin,3)
+				ObjPtr		:= args[2]
+				property	:= args[3]
+				
+				;Process args
+				theObj := ExecutableObjects[ObjPtr]
+				stdout.Write(JSON_Stringify(getProperty(theObj,property)))
+				stdout.Read(0)
+			} else if(Match1~="i)CLR_SetProperty"){
+				args := getArgs(cmdin,4)
+				ObjPtr		:= args[2]
+				property	:= args[3]
+				value		:= args[4]
+				
+				;Process args
+				theObj := ExecutableObjects[ObjPtr]
+				e=
+				setProperty(theObj,property,value,e)
+				if(e=""){
+					stdout.Write("true")
+					stdout.Read(0)
+				} else {
+					stdout.Write("false")
+					stdout.Read(0)
+					
+					stderr.WriteLine(e)
+					stderr.Read(0)
+				}
 			}
 		}
 	}
-	sleep,250
+	;sleep,50
 }
 
 ;#########################
@@ -211,6 +248,47 @@ getRest(cmdin,expectedArgs){
 	return SubStr(cmdin,curPos+1)
 }
 
-execObjMember(theClass,theFunc,theArgs){
-	return %theClass%[theFunc](theArgs*)
+execObjMember(ByRef obj,theFunc,theArgs){
+	return obj[theFunc](theArgs*)
 }
+
+getProperty(ByRef obj,property){
+	return obj[property]
+}
+
+setProperty(ByRef obj,property, value, ByRef errors){
+	try {
+		obj[property] := value
+	} catch e {
+		errors := e
+	}
+}
+
+JSON_Parse(orgs){
+	json := new Json("  ", "`r`n")
+	return json.parse(orgs)
+}
+
+JSON_Stringify(x){
+	json := new Json("", "")
+	
+	if(Type(x)=="Object"){
+		return json.stringify(x)
+	} else if(Type(x)=="String"){
+		x := RegexReplace(x,"(\n|\r)+","\n")
+		return """" . x . """"
+	} else if(Type(x)=="Number"){
+		return x
+	}
+}
+
+type(v) {
+    if IsObject(v)
+        return "Object"
+	return v="" || [v].GetCapacity(1) ? "String" : "Number"
+}
+	
+;JAVASCRIPT ARGUMENT CREATION:
+;var passMeArguments = function(){
+;    return JSON.stringify(arguments.length === 1 ? [arguments[0]] : Array.apply(null, arguments))
+;}
