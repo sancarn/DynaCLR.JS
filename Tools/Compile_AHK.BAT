@@ -1,0 +1,2 @@
+"Libs\ToConsoleApp\Autohotkey\Ahk2Exe.exe" /in ..\DynaCLR.ahk /icon ..\Resources\DynaCLR.ico /out ..\_Release\node_modules\DynaCLR\DynaCLR.exe
+Libs\ToConsoleApp\ChangeAppType.exe "..\_Release\node_modules\DynaCLR\DynaCLR.exe" "C"

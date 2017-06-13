@@ -1,9 +1,24 @@
-﻿#include Libs\CLR.ahk
+﻿#NoTrayIcon
+#include Libs\CLR.ahk
 #include Libs\JSON.ahk
 
 ;How to execute AHK as console application:
 ;http://autohotkey.com/board/topic/52576-ahk-l-output-to-command-line/?p=372590
 ;#############################################################
+;
+; COMMAND LIST
+;
+;	StringInject <newLinePlaceHolder> <injectedString...>
+;	StringReturn <pointer>
+;	CLR_LoadLibrary <AssemblyName> <AppDomainPtr>
+;	CLR_CreateObject <Assembly> <TypeName> <Args<JSONParsed array>>
+;	CLR_CompileAssembly <CodePtr> <References> <ProviderAssembly> <ProviderType> <AppDomainPtr> <FileNamePtr> <CompilerOptions>
+;	AppDomain_New <AppDomain> <BaseDirPtr>
+;	AppDomain_Drop <AppDomainPtr>
+;	CLR_Execute <ObjPtr> <FuncName> <Args<JSONParsed array>>
+;	CLR_GetProperty <ObjPtr> <Property>
+;	CLR_SetProperty <ObjPtr> <Property> <Value<JSONParsed>>
+
 
 Global LoadedAssemblies		:= []		;These can be made with CLR_Compile and CLR_LoadLibrary
 Global ExecutableObjects    := []		;These can be made with CLR_CreateObject
@@ -91,7 +106,7 @@ while true
 			Query := "^([^ ]+)"
 			RegexMatch(cmdin,Query,Match)
 			if(Match1~="i)StringInject"){
-				;syntax:    "StringInject <newLinePlaceHolder> <injectedString...>" 
+				;syntax:    StringInject <newLinePlaceHolder> <injectedString...>
 				;note: newLinePlaceHolder must not contain any white space!!
 				args := getArgs(cmdin,2) ;First 2 arguments are bound as single words
 				str  := getRest(cmdin,3) ;3rd argument is a multi-worded string
@@ -102,14 +117,14 @@ while true
 				
 			}else if (Match1~="i)StringReturn"){
 				;Used for debugging as most of this is invisible.
-				;syntax:		"StringReturn <pointer>"
+				;syntax:		StringReturn <pointer>
 				;description:	Returns a string from a location in memory, indicated by <pointer>
 				args := getArgs(cmdin,2)
 				stdout.Write(JSON_Stringify(StoredStrings[args[2]]))
 				stdout.Read(0) ; Flush the write buffer.
 				
 			} else if(Match1~="i)CLR_LoadLibrary"){
-				;syntax:		"CLR_LoadLibrary <AssemblyName> <AppDomainPtr>"
+				;syntax:		CLR_LoadLibrary <AssemblyName> <AppDomainPtr>
 				;description:	Returns a pointer to a loaded assembly.
 				args := getArgs(cmdin,3)
 				domain := args[3] ? AppDomains[args[3]] : 0
@@ -117,7 +132,7 @@ while true
 				stdout.Read(0)
 				
 			} else if(Match1~="i)CLR_CreateObject"){
-				;syntax:		"CLR_CreateObject Assembly TypeName Args*"
+				;syntax:		CLR_CreateObject <Assembly> <TypeName> <Args*>
 				;description:	returns a pointer to an executable object
 				;Args* is an array strinfified using JSON.stringify(array). E.G. [1,"2",{"3":"4"},[5,6]]
 				;These arguments are passed to the objects constructor.
@@ -130,7 +145,7 @@ while true
 				stdout.Read(0)
 				
 			} else if(Match1~="i)CLR_CompileAssembly"){
-				;syntax:		"CLR_CompileAssembly CodePtr References ProviderAssembly ProviderType AppDomainPtr FileNamePtr CompilerOptions"
+				;syntax:		CLR_CompileAssembly <CodePtr> <References> <ProviderAssembly> <ProviderType> <AppDomainPtr> <FileNamePtr> <CompilerOptions>
 				;description:	returns a pointer to a loaded assembly which is created from compiled CLR code.
 				args := getArgs(cmdin,8)
 				CodePtr			  := args[2]
@@ -169,9 +184,9 @@ while true
 				domainPtr	:= args[2]
 				Wrapper_AppDomain_Drop(domainPtr)
 			} else if(Match1~="i)CLR_Execute"){
-			;syntax:			Execute <ObjPtr> <FuncName> <Args*>
-			;Args* is an array strinfified using JSON.stringify(array). E.G. [1,"2",{"3":"4"},[5,6]]
-			;These arguments are the arguments passed to the C#/VB object on execution.
+				;syntax:			Execute <ObjPtr> <FuncName> <Args*>
+				;Args* is an array strinfified using JSON.stringify(array). E.G. [1,"2",{"3":"4"},[5,6]]
+				;These arguments are the arguments passed to the C#/VB object on execution.
 				args := getArgs(cmdin,3)
 				ObjPtr		:= args[2]
 				FuncName	:= args[3]
@@ -183,6 +198,8 @@ while true
 				stdout.Write(JSON_Stringify(ret ? ret : "true"))
 				stdout.Read(0)
 			} else if(Match1~="i)CLR_GetProperty"){
+				;syntax:			CLR_GetProperty <ObjPtr> <Property>
+				;description:		Get a property from a CLR object.
 				args := getArgs(cmdin,3)
 				ObjPtr		:= args[2]
 				property	:= args[3]
@@ -192,10 +209,12 @@ while true
 				stdout.Write(JSON_Stringify(getProperty(theObj,property)))
 				stdout.Read(0)
 			} else if(Match1~="i)CLR_SetProperty"){
+				;syntax:		CLR_SetProperty <ObjPtr> <Property> <Value>
+				;description:	Set a property of a CLR object to a particular Value.
 				args := getArgs(cmdin,4)
 				ObjPtr		:= args[2]
 				property	:= args[3]
-				value		:= args[4]
+				value		:= JSON_Parse(args[4])
 				
 				;Process args
 				theObj := ExecutableObjects[ObjPtr]

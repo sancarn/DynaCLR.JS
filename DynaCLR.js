@@ -1,58 +1,3 @@
-/*
-	Contrib#1:{
-		Question:{
-			Consider the following class:
-				class TimerFunk {
-					constructor(someObject){
-						this.a = 1
-						this.someObject = someObject
-					}
-					funk(){
-						console.log(this.a)
-						if(this.a > 2){
-							return
-						}
-						this.a++
-						this.someObject.execCallback(this.funk)
-					}
-				}
-			
-			When the following commands are executed:
-			
-				t = new TimerFunk({execCallback:function(callback){callback()}})
-				t.funk()
-			
-			it is intended that the following data is logged:
-				0
-				1
-				2
-				3
-			instead this data is logged:
-				VM2097:9 1
-				VM2097:9 Uncaught TypeError: Cannot read property 'a' of undefined
-					at funk (<anonymous>:9:25)
-					at Object.execCallback (<anonymous>:5:13)
-					at TimerFunk.funk (<anonymous>:13:25)
-					at <anonymous>:1:3
-
-			From debugging I have figured out that this is because on the first loop this represents the object t however, on the 2nd loop this represents someObject.
-			Is there any way I can fix this and allow me to access class properties from within the executed callback?
-		} answer {
-			Your callback is called without the TimerFunk instance t as the this object:
-				function(callback){callback()}}
-				
-			A solution is to bind the this object of the callback to the TimerFunk instance:
-				funk() {
-				  ...
-				  this.someObject.execCallback(this.funk.bind(this));
-				}
-				
-			Alternatively, you can explicitly pass t as the this object via callback.call(t):
-				t = new TimerFunk({execCallback:function(callback){callback.call(t)}});	
-		}
-	}
-*/
-
 class Pointer {
 	constructor(){
 		this.value = undefined
@@ -83,7 +28,7 @@ class CLR_Events extends Array {
 		
 		var e = new CLR_Event(cmd,args,ret,this.CLR)
 		this.push(e)
-		if(!this.isRunning){
+		if(!this.isRunning && this.isReady){
 			this.runAll()
 		}
 	}
@@ -119,16 +64,20 @@ class CLR_Event {
 		var newArgs = []
 		this.args.forEach(
 			function(arg){
-				if(arg.type=='ptr'){
-					if(typeof arg.value == "object"){
-						newArgs.push(JSON.stringify(arg.value))
-					} else {
-						newArgs.push(arg.value)
-					}
-				} else if(typeof arg == "object"){
-					newArgs.push(JSON.stringify(arg))
+				if(arg==undefined){
+					newArgs.push('')
 				} else {
-					newArgs.push(arg)
+					if(arg.type=='ptr'){
+						if(typeof arg.value == "object"){
+							newArgs.push(JSON.stringify(arg.value))
+						} else {
+							newArgs.push(arg.value)
+						}
+					} else if(typeof arg == "object"){
+						newArgs.push(JSON.stringify(arg))
+					} else {
+						newArgs.push(arg)
+					}
 				}
 			}
 		)
@@ -137,14 +86,24 @@ class CLR_Event {
 }
 
 var CLR = {}
-CLR.CLRProcess = require('child_process').spawn('DynaCLR.exe')
+CLR.isReady = false
+CLR.CLRProcess = require('child_process').spawn(require('path').resolve(__dirname,'DynaCLR.exe'))
 CLR.CLRProcess.stdout.once('data',function(data){
 	if(data!="Ready for input."){
 		CLR.CLRProcess.kill()
 		CLR = undefined
 		throw new Error("Cannot create CLR process")
 	} else {
+		//isReady determines the run state of new events.
+		CLR.isReady = true
+		
+		//Call event.
 		CLR.onceReady()
+
+		//Process all currently setup data.
+		if(CLR.Events.length>0){
+			CLR.Events.runAll()
+		}
 	}
 })
 CLR.Events = new CLR_Events(CLR)
@@ -152,14 +111,67 @@ CLR.Events = new CLR_Events(CLR)
 //UDFs
 
 CLR.StringInject = function(str,CrLf="__CLR-CrLf__"){
-	var ptr = new Pointer
-	this.Events.new("StringInject",[CrLf,str.replace(/\n/g,CrLf)],ptr) //Note CLR.exe requires arguments to be the other way round -- easier command line passing
-	return ptr
+	var pRet = new Pointer
+	this.Events.new("StringInject",[CrLf,str.replace(/\n/g,CrLf)],pRet) //Note CLR.exe requires arguments to be the other way round -- easier command line passing
+	return pRet
 }
 CLR.StringReturn = function(ptr){
-	var sRet = new Pointer
-	this.Events.new("StringReturn",[ptr],sRet)
-	return sRet
+	var pRet = new Pointer
+	this.Events.new("StringReturn",[ptr],pRet)
+	return pRet
+}
+
+CLR.LoadLibrary = function(AssemblyName, AppDomainPtr=0){
+	var pRet = new Pointer
+	this.Events.new("CLR_LoadLibrary",[AssemblyName, AppDomainPtr],pRet)
+	return pRet
+}
+
+CLR.CreateObject = function(Assembly, TypeName, ArgsArr){
+	var pRet = new Pointer
+	this.Events.new("CLR_CreateObject",[Assembly, TypeName,JSON.stringify(ArgsArr)],pRet)
+	return pRet
+}
+
+CLR.CompileAssembly = function(CodePtr, References, ProviderAssembly, ProviderType, AppDomainPtr=0, FileNamePtr=0, CompilerOptions=0){
+	var pRet = new Pointer
+	var args = [CodePtr, typeof References == "object" ? References.join("|") : References, ProviderAssembly, ProviderType]
+	if(AppDomainPtr!=0) args.push(AppDomainPtr)
+	if(FileNamePtr!=0) args.push(FileNamePtr)
+	if(CompilerOptions!="") args.push(CompilerOptions)
+	this.Events.new("CLR_CompileAssembly",args,pRet)
+	return pRet
+}
+
+CLR.Execute = function( ObjPtr, FuncName, ArgsArr){
+	var pRet = new Pointer
+	this.Events.new("CLR_Execute",[ObjPtr, FuncName, JSON.stringify(ArgsArr)],pRet)
+	return pRet
+}
+
+CLR.GetProperty = function( ObjPtr, Property){
+	var pRet = new Pointer
+	this.Events.new("CLR_GetProperty",[ObjPtr, Property],pRet)
+	return pRet
+}
+
+CLR.SetProperty = function( ObjPtr, Property, Value){
+	var pRet = new Pointer
+	this.Events.new("CLR_SetProperty",[ObjPtr,Property,JSON.stringify(Value)],pRet)
+	return pRet
+}
+
+CLR.AppDomain = {}
+CLR.AppDomain.New = function(AppDomain=0, BaseDirPtr=0){
+	var pRet = new Pointer
+	this.Events.new("AppDomain_New",[AppDomain,BaseDirPtr],pRet)
+	return pRet
+}
+
+CLR.AppDomain.Drop = function(AppDomainPtr){
+	var pRet = new Pointer
+	this.Events.new("AppDomain_Drop",[AppDomainPtr],pRet)
+	return pRet
 }
 
 CLR.Finally = function(callback){
@@ -168,16 +180,4 @@ CLR.Finally = function(callback){
 
 CLR.onceReady = function(){
 	console.log('CLR is ready for input...\n')
-	/* Example 1 - Using String Inject */
-	S_ptr_1 = CLR.StringInject("Hello world!");
-	S_ptr_2 = CLR.StringInject("Hello world!\nMy name is Sancarn!");
-	S_ptr_3 = CLR.StringInject("Mary had a little lamb;And it's name was Doug!",";");
-	S1 = CLR.StringReturn(S_ptr_1)
-	S2 = CLR.StringReturn(S_ptr_2)
-	S3 = CLR.StringReturn(S_ptr_3)
-	CLR.Finally(function(){
-		console.log("S1:\n" + S1.value + "\n-------------------")
-		console.log("S2:\n" + S2.value + "\n-------------------")
-		console.log("S3:\n" + S3.value + "\n-------------------")
-	});
 }

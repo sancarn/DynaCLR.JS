@@ -1,0 +1,55 @@
+This node module was written and invented by James Warren with help from Tar van Krieken.
+Any other contributions, which are not detailed on github, will be detailed in this document.
+
+Contrib#1:{
+	Question:{
+		Consider the following class:
+			class TimerFunk {
+				constructor(someObject){
+					this.a = 1
+					this.someObject = someObject
+				}
+				funk(){
+					console.log(this.a)
+					if(this.a > 2){
+						return
+					}
+					this.a++
+					this.someObject.execCallback(this.funk)
+				}
+			}
+		
+		When the following commands are executed:
+		
+			t = new TimerFunk({execCallback:function(callback){callback()}})
+			t.funk()
+		
+		it is intended that the following data is logged:
+			0
+			1
+			2
+			3
+		instead this data is logged:
+			VM2097:9 1
+			VM2097:9 Uncaught TypeError: Cannot read property 'a' of undefined
+				at funk (<anonymous>:9:25)
+				at Object.execCallback (<anonymous>:5:13)
+				at TimerFunk.funk (<anonymous>:13:25)
+				at <anonymous>:1:3
+
+		From debugging I have figured out that this is because on the first loop this represents the object t however, on the 2nd loop this represents someObject.
+		Is there any way I can fix this and allow me to access class properties from within the executed callback?
+	} answer {
+		Your callback is called without the TimerFunk instance t as the this object:
+			function(callback){callback()}}
+			
+		A solution is to bind the this object of the callback to the TimerFunk instance:
+			funk() {
+				...
+				this.someObject.execCallback(this.funk.bind(this));
+			}
+			
+		Alternatively, you can explicitly pass t as the this object via callback.call(t):
+			t = new TimerFunk({execCallback:function(callback){callback.call(t)}});	
+	}
+}
