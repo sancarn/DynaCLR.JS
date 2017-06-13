@@ -28,7 +28,7 @@ class CLR_Events extends Array {
 		
 		var e = new CLR_Event(cmd,args,ret,this.CLR)
 		this.push(e)
-		if(!this.isRunning && this.isReady){
+		if(!this.isRunning && this.CLR.isReady){
 			this.runAll()
 		}
 	}
