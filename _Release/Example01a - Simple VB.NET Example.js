@@ -1,4 +1,4 @@
-/* Example 2b - Simple C#.NET Example */
+/* Example 1a - Simple VB.NET Example */
 /**
  *  The Common Language Runtime (CLR) is an Execution Environment.
  * It works as an interface between Operating Systems and applications written in
@@ -10,17 +10,15 @@
  
 const CLR = require('DynaCLR').new()
 code = `
-using System.Windows.Forms;
-class Foo {
-	public void Test() {
-		MessageBox.Show("Hello, world, from C#!");
-	}
-}
+Imports System.Windows.Forms
+Class Foo
+	Public Sub Test()
+		MessageBox.Show("Hello, world, from VB!")
+	End Sub
+End Class
 `
-
 References = ["System.dll","System.Windows.Forms.dll"]
-pCode 	=	CLR.StringInject(code)
-asm 	=	CLR.CompileAssembly(pCode, References, "System", "Microsoft.CSharp.CSharpCodeProvider")
+asm 	=	CLR.CompileAssembly(code, References, "System", "Microsoft.VisualBasic.VBCodeProvider")
 obj 	=	CLR.CreateObject(asm, "Foo")
 status	=	CLR.Execute(obj,"Test")
 CLR.Finally(function(){

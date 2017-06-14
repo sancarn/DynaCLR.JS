@@ -1,7 +1,7 @@
 class Pointer {
 	constructor(){
 		this.value = undefined
-		this.type = "ptr"
+		//this.type = "ptr"
 	}
 }
 
@@ -67,7 +67,7 @@ class CLR_Event {
 				if(arg==undefined){
 					newArgs.push('')
 				} else {
-					if(arg.type=='ptr'){
+					if(arg.constructor.name=='Pointer'){
 						if(typeof arg.value == "object"){
 							newArgs.push(JSON.stringify(arg.value))
 						} else {
@@ -120,9 +120,31 @@ CLR.StringReturn = function(ptr){
 	this.Events.new("StringReturn",[ptr],pRet)
 	return pRet
 }
+CLR.StringGetPtr = function(v,argOptional,defaultValue){
+	//If v is a previously injected string pointer then return v
+	//If v is a string then return CLR.StringInject(v)
+	//If argument is optional return pointer with value = defaultValue (if available) else with value=0
+	//Else if argument is not optional (or if argOptional = undefined) throw error
+	
+	//CASE: StringGetPtr(k=(new Pointer))
+	if (typeof v == 'object' && v.constructor.name == 'Pointer'){
+		return v
+	//CASE: StringGetPtr("my string")
+	} else if(v != undefined && v.constructor.name == "String") {
+		return this.StringInject(v)
+	//CASE: StringGetPtr()
+	}  else if(!argOptional) {
+		throw Error("Invalid parameter input type.")
+	//CASE: StringGetPtr(,true) AND StringGetPtr(,true,"myDefaultValue")
+	} else {
+		vPtr = new Pointer
+		vPtr.value = defaultValue != undefined ? defaultValue : 0
+	}
+}
 
-CLR.LoadLibrary = function(AssemblyName, AppDomainPtr=0){
+CLR.LoadLibrary = function(AssemblyName, AppDomain){
 	var pRet = new Pointer
+	var AppDomainPtr = AppDomain ? AppDomain : 0
 	this.Events.new("CLR_LoadLibrary",[AssemblyName, AppDomainPtr],pRet)
 	return pRet
 }
@@ -133,13 +155,14 @@ CLR.CreateObject = function(Assembly, TypeName, ArgsArr){
 	return pRet
 }
 
-CLR.CompileAssembly = function(CodePtr, References, ProviderAssembly, ProviderType, AppDomainPtr=0, FileNamePtr=0, CompilerOptions=0){
+CLR.CompileAssembly = function(vCode, References, ProviderAssembly, ProviderType, AppDomain, vFileName, CompilerOptions){
 	var pRet = new Pointer
-	var args = [CodePtr, typeof References == "object" ? References.join("|") : References, ProviderAssembly, ProviderType]
-	if(AppDomainPtr!=0) args.push(AppDomainPtr)
-	if(FileNamePtr!=0) args.push(FileNamePtr)
-	if(CompilerOptions!="") args.push(CompilerOptions)
-	this.Events.new("CLR_CompileAssembly",args,pRet)
+	var CodePtr = this.StringGetPtr(vCode)
+	var AppDomainPtr = AppDomain ? AppDomain : 0
+	var FileNamePtr = this.StringGetPtr(vFileName, true)
+	CompilerOptions = CompilerOptions ? CompilerOptions : ""
+	
+	this.Events.new("CLR_CompileAssembly",[CodePtr, typeof References == "object" ? References.join("|") : References, ProviderAssembly, ProviderType, AppDomainPtr, FileNamePtr, CompilerOptions],pRet)
 	return pRet
 }
 
@@ -162,16 +185,22 @@ CLR.SetProperty = function( ObjPtr, Property, Value){
 }
 
 CLR.AppDomain = {}
-CLR.AppDomain.New = function(AppDomain=0, BaseDirPtr=0){
+CLR.AppDomain.New = function(iAppDomain, BaseDir){
 	var pRet = new Pointer
+	var AppDomain = iAppDomain ? iAppDomain : 0
+	var BaseDirPtr = this.StringGetPtr(BaseDir)
 	this.Events.new("AppDomain_New",[AppDomain,BaseDirPtr],pRet)
 	return pRet
 }
 
 CLR.AppDomain.Drop = function(AppDomainPtr){
 	var pRet = new Pointer
-	this.Events.new("AppDomain_Drop",[AppDomainPtr],pRet)
-	return pRet
+	if (AppDomainPtr.constructor.name == "Pointer"){
+		this.Events.new("AppDomain_Drop",[AppDomainPtr],pRet)
+		return pRet
+	} else {
+		throw new Error("AppDomain must be passed by reference to the Drop function.")
+	}
 }
 
 CLR.Finally = function(callback){
