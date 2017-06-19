@@ -109,7 +109,7 @@ while true
 				;syntax:    StringInject <newLinePlaceHolder> <injectedString...>
 				;note: newLinePlaceHolder must not contain any white space!!
 				args := getArgs(cmdin,2) ;First 2 arguments are bound as single words
-				str  := getRest(cmdin,3) ;3rd argument is a multi-worded string
+				str  := getRest(cmdin,2) ;2 arguments expected, rest optional
 				CrLf := args[2]
 				out := Wrapper_InjectString(StrReplace(str, CrLf, "`r`n"))
 				stdout.Write(out)
@@ -195,6 +195,7 @@ while true
 				;Process arguments
 				theObj := ExecutableObjects[ObjPtr]
 				ret := execObjMember(theObj,FuncName,theArgs ? theArgs : [])
+				clipboard := ret
 				stdout.Write(JSON_Stringify(ret ? ret : "true"))
 				stdout.Read(0)
 			} else if(Match1~="i)CLR_GetProperty"){
@@ -259,7 +260,7 @@ getRest(cmdin,expectedArgs){
 	curPos:=0
 	Loop, parse, cmdin, %A_Space%
 	{
-		if(A_Index=expectedArgs){
+		if(A_Index = expectedArgs +1){
 			break
 		}
 		curPos += StrLen(A_LoopField)+1
@@ -284,21 +285,13 @@ setProperty(ByRef obj,property, value, ByRef errors){
 }
 
 JSON_Parse(orgs){
-	json := new Json("  ", "`r`n")
-	return json.parse(orgs)
+	return JSON.parse(orgs)
 }
 
 JSON_Stringify(x){
-	json := new Json("", "")
-	
-	if(Type(x)=="Object"){
-		return json.stringify(x)
-	} else if(Type(x)=="String"){
-		x := RegexReplace(x,"(\n|\r)+","\n")
-		return """" . x . """"
-	} else if(Type(x)=="Number"){
-		return x
-	}
+	;msgbox, % x
+	;msgbox % JSON.stringify(x)
+	return JSON.stringify(x)
 }
 
 type(v) {

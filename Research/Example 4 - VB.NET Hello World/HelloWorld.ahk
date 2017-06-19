@@ -16,7 +16,7 @@ classToTest	:= "Foo"
 asm := CLR_CompileVB(vb, "System.dll | System.Windows.Forms.dll")
 obj := CLR_CreateObject(asm, classToTest)
 ;obj.Test("Bob")
-execObjMember(obj,funcToTest,)
+execObjMember(obj,funcToTest,[])
 
 
 execObjMember(obj,theFunc,theArgs){
