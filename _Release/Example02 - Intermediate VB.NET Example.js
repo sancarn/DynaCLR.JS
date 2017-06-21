@@ -1,3 +1,11 @@
+/**
+ * LESSONS LEARNT:
+ * 1. Arrays passed from JavaScript to CLR are COM Objects (Safe Arrays?). They are NOT native .NET Arrays.
+ * 2. Arrays passed to CLR have all the same methods as AHK. You access the arrays the same also. (obj(1),obj(2) ... for i = 1 to obj.length() ...)
+ * 3. Native Arrays cannot be returned from CLR to AHK.
+ * 4. Huge data strings cannot easily be passed from AHK to NodeJS due to the way STDOUT is read. For this reason it is better to dump the data to a temporary file and read the data out with require('fs').fileRead()
+ */
+
 function getFileIcons__testData(){
     var imagePaths =  ["C:\\Users\\sancarn\\Desktop\\Programming\\JS\\Launch Menu\\data"
                       ,"C:\\Users\\sancarn\\Desktop\\Programming\\JS\\Launch Menu\\DirectoryList.ahk"
@@ -28,7 +36,7 @@ function getFileIcons(imagePaths,callback){
             Imports System
             Imports System.Runtime.InteropServices
             Imports System.Drawing
-            
+			
             Public Enum IconSize As Integer
             	Large = &H0 '32x32
             	Small = &H1 '16x16
@@ -48,28 +56,28 @@ function getFileIcons(imagePaths,callback){
             	Private Const ILD_TRANSPARENT As UInteger = &H1
             	Private Const ILD_IMAGE As UInteger = &H20
             	Private Const FILE_ATTRIBUTE_NORMAL As UInteger = &H80
-            
+				
             	<DllImport("shell32.dll", EntryPoint:="#727")>
             	Private Shared Function SHGetImageList(ByVal iImageList As Integer, ByRef riid As Guid, ByRef ppv As IImageList) As Integer
             	End Function
-            
+				
             	<DllImport("shell32.dll", EntryPoint:="SHGetFileInfoW", CallingConvention:=CallingConvention.StdCall)>
             	Private Shared Function SHGetFileInfoW(<MarshalAs(UnmanagedType.LPWStr)> ByVal pszPath As String, ByVal dwFileAttributes As UInteger, ByRef psfi As SHFILEINFOW, ByVal cbFileInfo As Integer, ByVal uFlags As UInteger) As Integer
             	End Function
-            
+				
             	<DllImport("shell32.dll", EntryPoint:="SHGetFileInfoW", CallingConvention:=CallingConvention.StdCall)>
             	Private Shared Function SHGetFileInfoW(ByVal pszPath As IntPtr, ByVal dwFileAttributes As UInteger, ByRef psfi As SHFILEINFOW, ByVal cbFileInfo As Integer, ByVal uFlags As UInteger) As Integer
             	End Function
-            
+				
             	<DllImport("user32.dll", EntryPoint:="DestroyIcon")>
             	Private Shared Function DestroyIcon(ByVal hIcon As IntPtr) As <MarshalAs(UnmanagedType.Bool)> Boolean
             	End Function
-            
+				
             	<StructLayout(LayoutKind.Sequential)>
             	Private Structure RECT
             		Public left, top, right, bottom As Integer
             	End Structure
-            
+				
             	<StructLayout(LayoutKind.Sequential, CharSet:=CharSet.[Unicode])>
             	Private Structure SHFILEINFOW
             		Public hIcon As System.IntPtr
@@ -78,7 +86,7 @@ function getFileIcons(imagePaths,callback){
             		<MarshalAs(UnmanagedType.ByValTStr, SizeConst:=260)> Public szDisplayName As String
             		<MarshalAs(UnmanagedType.ByValTStr, SizeConst:=80)> Public szTypeName As String
             	End Structure
-            
+				
             	<StructLayout(LayoutKind.Sequential)>
             	Private Structure IMAGELISTDRAWPARAMS
             		Public cbSize As Integer
@@ -99,7 +107,7 @@ function getFileIcons(imagePaths,callback){
             		Public Frame As Integer
             		Public crEffect As Integer
             	End Structure
-            
+				
             	<StructLayout(LayoutKind.Sequential)>
             	Private Structure IMAGEINFO
             		Public hbmImage As IntPtr
@@ -108,7 +116,7 @@ function getFileIcons(imagePaths,callback){
             		Public Unused2 As Integer
             		Public rcImage As RECT
             	End Structure
-            
+				
             	<ComImport(), Guid("46EB5926-582E-4017-9FDF-E8998DAA0950"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)>
             	Private Interface IImageList
             		<PreserveSig()> Function Add(ByVal hbmImage As IntPtr, ByVal hbmMask As IntPtr, ByRef pi As Integer) As Integer
@@ -141,22 +149,22 @@ function getFileIcons(imagePaths,callback){
             		<PreserveSig()> Function GetItemFlags(ByVal i As Integer, ByRef dwFlags As Integer) As Integer
             		<PreserveSig()> Function GetOverlayImage(ByVal iOverlay As Integer, ByRef piIndex As Integer) As Integer
             	End Interface
-            
+				
             	Public Shared Function GetIconFrom(ByVal PathName As String, ByVal IcoSize As IconSize, ByVal UseFileAttributes As Boolean) As Icon
             		Dim ico As Icon = Nothing
             		Dim shinfo As New SHFILEINFOW()
             		Dim flags As UInteger = SHGFI_SYSICONINDEX
-            
+				
             		If UseFileAttributes Then flags = (flags Or SHGFI_USEFILEATTRIBUTES)
-            
+				
             		If SHGetFileInfoW(PathName, FILE_ATTRIBUTE_NORMAL, shinfo, Marshal.SizeOf(shinfo), flags) = 0 Then
             			Throw New IO.FileNotFoundException()
             		End If
-            
+				
             		Dim iidImageList As New Guid("46EB5926-582E-4017-9FDF-E8998DAA0950")
             		Dim iml As IImageList = Nothing
             		SHGetImageList(IcoSize, iidImageList, iml)
-            
+				
             		If iml IsNot Nothing Then
             			Dim hIcon As IntPtr = IntPtr.Zero
             			iml.GetIcon(shinfo.iIcon, ILD_IMAGE, hIcon)
@@ -169,17 +177,49 @@ function getFileIcons(imagePaths,callback){
             				DestroyIcon(hIcon)
             			End If
             		End If
-            
+				
             		Return ico
             	End Function
-            
+				
             	Public Function GetBase64From(ByVal PathName As String, ByVal IcoSize As IconSize, ByVal UseFileAttributes As Boolean) As String
             		Dim bitmap As Bitmap = GetIconFrom(PathName, IcoSize, UseFileAttributes).ToBitmap()
             		Dim stream As New System.IO.MemoryStream()
             		bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Bmp)
             		Return Convert.ToBase64String(stream.ToArray())
             	End Function
-            End Class
+				'Perhaps up here we need PathNames as object?
+				Public Function GetAllBase64From(ByVal PathNames As Object, ByVal IcoSize As IconSize, ByVal UseFileAttributes As Boolean) As String
+					'With an AHK array, get all assosciated icons, write them to a temporary file and return the file path.
+					Dim sRet As String = ""
+					Dim len as integer = PathNames.length()
+					if len >= 1 then
+						sRet = Me.GetBase64From(PathNames(1), IcoSize, UseFileAttributes)
+						if len >= 2 then
+							For i as integer = 2 to PathNames.length()
+								sRet &= """,""" & Me.GetBase64From(PathNames(i), IcoSize, UseFileAttributes)
+							Next
+						end if
+					end if
+					sRet = "[""" & sRet & """]"
+					return WriteToTempFile(sRet)
+				End Function
+				Public Function WriteToTempFile(ByVal Data As String) As String
+					' Writes text to a temporary file and returns path
+					Dim strFilename As String = System.IO.Path.GetTempFileName()
+					Dim objFS As New System.IO.FileStream(strFilename, _
+					System.IO.FileMode.Append, _
+					System.IO.FileAccess.Write)
+					' Write data
+					Dim Writer As New System.IO.StreamWriter(objFS)
+					With Writer
+						.BaseStream.Seek(0, System.IO.SeekOrigin.End)
+						.WriteLine(Data)
+						.Flush()
+						.Close()
+					End With
+					Return strFilename
+				End Function
+			End Class
         `
         var references = [
                              "System.dll",
@@ -190,27 +230,26 @@ function getFileIcons(imagePaths,callback){
         var   CLR = DynaCLR.new()
         var   asm = CLR.CompileAssembly(vb,references, "System", "Microsoft.VisualBasic.VBCodeProvider")
         var   obj = CLR.CreateObject(asm, "IconHelper")
+		var  imgs = CLR.Execute(obj,"GetAllBase64From", [images,iconSizes.Large,false])
         CLR.Finally(function(){
-            getImages(CLR,obj,[],images,callback)
+            var fs = require('fs')
+			fs.readFile(imgs.value,"ascii",function(err,data){
+				ret = ""
+				var e=""
+				try {
+					ret = JSON.parse(data)
+				} catch(e) {
+					ret = data
+				}
+				callback({ret,err,e})
+			})
         })
         return true
     }
-    function getImages(CLR, obj, data64,images,callback){
-        if (images.length == 0){
-            CLR.CLRProcess.kill()
-            CLR = null
-            callback(data64)
-        } else {
-            var img = CLR.Execute(obj,"GetBase64From", [images.shift(),iconSizes.Large,0])
-            CLR.Finally(function(){
-                data64.push(img.value)
-				setTimeout(function(){
-					getImages(CLR, obj, data64,images,callback)
-				},500)
-                
-            })
-        }
-    }
+   
 }
 
+var i;
+console.time("getFileIcons__testData")
 getFileIcons__testData()
+console.timeEnd("getFileIcons__testData")

@@ -195,7 +195,6 @@ while true
 				;Process arguments
 				theObj := ExecutableObjects[ObjPtr]
 				ret := execObjMember(theObj,FuncName,theArgs ? theArgs : [])
-				clipboard := ret
 				stdout.Write(JSON_Stringify(ret ? ret : "true"))
 				stdout.Read(0)
 			} else if(Match1~="i)CLR_GetProperty"){
