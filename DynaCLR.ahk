@@ -195,6 +195,15 @@ while true
 				;Process arguments
 				theObj := ExecutableObjects[ObjPtr]
 				ret := execObjMember(theObj,FuncName,theArgs ? theArgs : [])
+				if(ComObjType(ret)&& 0x2000){ ;SAFEARRAY
+					_ret := ret, ret := []
+					for key in _ret
+						ret.push(key)
+				} else if (ComObjType(ret)=9 && DeclaredType){	;COM Object
+					if parseAs =
+						parseAs = Object
+					ret := getCOMObject(ret,DeclaredType,parseAs)
+				}
 				stdout.Write(JSON_Stringify(ret ? ret : "true"))
 				stdout.Read(0)
 			} else if(Match1~="i)CLR_GetProperty"){
@@ -230,6 +239,11 @@ while true
 					stderr.WriteLine(e)
 					stderr.Read(0)
 				}
+			} else if(Match1 ~= "i)CLR_DeclareReturnType"){
+				;Syntax:		CLR_DeclareReturnType <type> <parseAs> <args*>
+				args := getArgs(cmdin,3)
+				DeclaredType	:= args[2]
+				parseAs			:= args[3]
 			}
 		}
 	}
@@ -298,8 +312,46 @@ type(v) {
         return "Object"
 	return v="" || [v].GetCapacity(1) ? "String" : "Number"
 }
+
+findIID(name){
+	Loop, Reg, HKEY_CLASSES_ROOT\Interface\, KV
+	{
+		RegRead, interface, HKEY_CLASSES_ROOT\Interface\%A_LoopRegName%
+		if (interface = name)
+			return A_LoopRegName		
+	}
+}
+
+getCOMObject(obj,DeclaredType,parser="Object"){
+	loop, % DeclaredType
+	{
+		obj := ComObject(ComObjType(obj), ComObjQuery(obj, DeclarationPathType="Direct" ? DeclaredType[A_Index] : findIID(DeclaredType[A_Index])), 1)
+	}
+	if(parser="Array"){	;Array of keys: [1,2,3,4]
+		ret := []
+		for k in obj
+			ret.push(k)
+	} else if(parser="Object"){	;A collection of Key-Value pairs
+		ret := {}
+		for k,v in obj
+			ret[k] := v
+	} else if(parser="Pointer"){
+		ExecutableObjects.push(obj)
+		ret := ExecutableObjects.length()
+	} else if(parser="RegisteredObject"){
+		;ToDo:
+		;	Register obj as com object and return CLSID (CLSID is randomly generated)
+	} else if(parser="FullObject") {
+		;ToDo
+		;	return key-value object with an array of methods with pointers to callable functins __methods = [...]
+	}
 	
+	return ret
+}
+
 ;JAVASCRIPT ARGUMENT CREATION:
 ;var passMeArguments = function(){
 ;    return JSON.stringify(arguments.length === 1 ? [arguments[0]] : Array.apply(null, arguments))
 ;}
+
+
