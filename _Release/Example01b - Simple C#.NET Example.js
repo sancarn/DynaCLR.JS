@@ -8,7 +8,7 @@
  * In this example we demonstrate the compilation and execution of a basic V#.NET application.
  */
  
-const CLR = require('DynaCLR').new()
+const CLR = require('dynaclr').new()
 code = `
 using System.Windows.Forms;
 class Foo {
