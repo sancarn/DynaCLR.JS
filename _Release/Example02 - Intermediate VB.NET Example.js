@@ -226,7 +226,7 @@ function getFileIcons(imagePaths,callback){
                              "System.Drawing.dll"
                          ]
         
-        var   DynaCLR = require('DynaCLR')
+        var   DynaCLR = require('dynaclr')
         var   CLR = DynaCLR.new()
         var   asm = CLR.CompileAssembly(vb,references, "System", "Microsoft.VisualBasic.VBCodeProvider")
         var   obj = CLR.CreateObject(asm, "IconHelper")
