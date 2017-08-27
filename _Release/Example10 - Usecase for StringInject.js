@@ -8,7 +8,7 @@
  * In this example we demonstrate the compilation and execution of a basic VB.NET application.
  */
  
-const CLR = require('DynaCLR').new()
+const CLR = require('dynaclr').new()
 code = `
 Imports System.Windows.Forms
 Class Foo
